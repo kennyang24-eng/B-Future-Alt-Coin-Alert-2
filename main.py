@@ -4,7 +4,7 @@ from datetime import datetime
 
 # ── CONFIG ──────────────────────────────────────────────
 BOT_TOKEN = "8731021434:AAEpdZJ-BTiEeY2fdPFn3XshyX0bKi0SI-g"   # Replace this
-CHAT_ID   = "590265015"     # Replace this
+CHAT_ID   = "590265015"  
 
 WATCH_LIST = [
     "MOVEUSDT",
@@ -30,14 +30,20 @@ def send_telegram(message):
         print(f"Telegram error: {e}")
 
 def get_futures_prices():
-    url = "https://fapi.binance.com/fapi/v1/ticker/price"
-    response = requests.get(url, timeout=10)
-    data = response.json()
-    if isinstance(data, list):
-        return {item['symbol']: float(item['price']) for item in data}
-    else:
-        print(f"Unexpected response: {data}")
-        return {}
+    prices = {}
+    for symbol in WATCH_LIST:
+        try:
+            url = f"https://api.bybit.com/v5/market/tickers?category=linear&symbol={symbol}"
+            response = requests.get(url, timeout=10)
+            data = response.json()
+            if data['retCode'] == 0 and data['result']['list']:
+                price = float(data['result']['list'][0]['lastPrice'])
+                prices[symbol] = price
+            else:
+                print(f"[WARNING] {symbol} not found on Bybit!")
+        except Exception as e:
+            print(f"[ERROR] fetching {symbol}: {e}")
+    return prices
 
 def check_movements():
     current_prices = get_futures_prices()
@@ -46,14 +52,13 @@ def check_movements():
 
     for symbol in WATCH_LIST:
         if symbol not in current_prices:
-            print(f"[WARNING] {symbol} not found on Binance Futures!")
             continue
 
         current = current_prices[symbol]
 
         if symbol in price_cache:
-            prev       = price_cache[symbol]
-            change_pct = ((current - prev) / prev) * 100
+            prev        = price_cache[symbol]
+            change_pct  = ((current - prev) / prev) * 100
             cooldown_ok = (now_ts - last_alerted.get(symbol, 0)) > COOLDOWN
 
             if abs(change_pct) >= ALERT_THRESHOLD and cooldown_ok:
