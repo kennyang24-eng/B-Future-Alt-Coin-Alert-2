@@ -4,18 +4,19 @@ from datetime import datetime
 
 # ── CONFIG ──────────────────────────────────────────────
 BOT_TOKEN = "8731021434:AAEpdZJ-BTiEeY2fdPFn3XshyX0bKi0SI-g"   # Replace this
-CHAT_ID   = "590265015"  
+CHAT_ID   = "Y590265015"     # Replace this
 
-WATCH_LIST = [
-    "MOVEUSDT",
-    "HUSDT",
-    "LAYERUSDT",
-    "ALLOUSDT",
-]
+# CoinGecko IDs for your tokens
+WATCH_LIST = {
+    "MOVE":  "movement",
+    "H":     "h-token",
+    "LAYER": "solayer",
+    "ALLO":  "allora-network",
+}
 
 ALERT_THRESHOLD = 1.0   # Alert at 1% move within 1 minute
 CHECK_INTERVAL  = 60    # Check every 60 seconds
-COOLDOWN        = 300   # 5 min cooldown per token to avoid spam
+COOLDOWN        = 300   # 5 min cooldown per token
 # ────────────────────────────────────────────────────────
 
 price_cache  = {}
@@ -29,34 +30,25 @@ def send_telegram(message):
     except Exception as e:
         print(f"Telegram error: {e}")
 
-def get_futures_prices():
+def get_prices():
+    ids = ",".join(WATCH_LIST.values())
+    url = f"https://api.coingecko.com/api/v3/simple/price?ids={ids}&vs_currencies=usd"
+    response = requests.get(url, timeout=10)
+    data = response.json()
     prices = {}
-    for symbol in WATCH_LIST:
-        try:
-            url = f"https://api.bybit.com/v5/market/tickers?category=linear&symbol={symbol}"
-            response = requests.get(url, timeout=10)
-            print(f"[DEBUG] {symbol} raw response: {response.text[:200]}")
-            data = response.json()
-            if data['retCode'] == 0 and data['result']['list']:
-                price = float(data['result']['list'][0]['lastPrice'])
-                prices[symbol] = price
-            else:
-                print(f"[WARNING] {symbol} not found on Bybit!")
-        except Exception as e:
-            print(f"[ERROR] fetching {symbol}: {e}")
+    for symbol, cg_id in WATCH_LIST.items():
+        if cg_id in data:
+            prices[symbol] = data[cg_id]['usd']
+        else:
+            print(f"[WARNING] {symbol} ({cg_id}) not found on CoinGecko!")
     return prices
 
 def check_movements():
-    current_prices = get_futures_prices()
+    current_prices = get_prices()
     now_str = datetime.now().strftime("%H:%M:%S")
     now_ts  = time.time()
 
-    for symbol in WATCH_LIST:
-        if symbol not in current_prices:
-            continue
-
-        current = current_prices[symbol]
-
+    for symbol, current in current_prices.items():
         if symbol in price_cache:
             prev        = price_cache[symbol]
             change_pct  = ((current - prev) / prev) * 100
@@ -67,7 +59,7 @@ def check_movements():
                 emoji     = "📈" if change_pct > 0 else "📉"
 
                 msg = (
-                    f"{direction} <b>{symbol}</b> {emoji}\n"
+                    f"{direction} <b>{symbol}/USDT</b> {emoji}\n"
                     f"━━━━━━━━━━━━━━━━\n"
                     f"Change : <b>{change_pct:+.2f}%</b> in 1 min\n"
                     f"Price  : <b>${current:,.6f}</b>\n"
@@ -80,7 +72,7 @@ def check_movements():
 
         price_cache[symbol] = current
 
-    print(f"[{now_str}] ✅ Checked {len(WATCH_LIST)} pairs. Next in {CHECK_INTERVAL}s...")
+    print(f"[{now_str}] ✅ Checked {len(current_prices)} tokens. Next in {CHECK_INTERVAL}s...")
 
 # ── STARTUP ──────────────────────────────────────────────
 print("🤖 Kenny Price Alert Bot started!")
