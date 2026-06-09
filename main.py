@@ -30,10 +30,14 @@ def send_telegram(message):
         print(f"Telegram error: {e}")
 
 def get_futures_prices():
-    url = "https://fapi.binance.com/fapi/v1/premiumIndex"
+    url = "https://fapi.binance.com/fapi/v1/ticker/price"
     response = requests.get(url, timeout=10)
     data = response.json()
-    return {item['symbol']: float(item['markPrice']) for item in data}
+    if isinstance(data, list):
+        return {item['symbol']: float(item['price']) for item in data}
+    else:
+        print(f"Unexpected response: {data}")
+        return {}
 
 def check_movements():
     current_prices = get_futures_prices()
