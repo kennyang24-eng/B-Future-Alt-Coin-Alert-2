@@ -1,25 +1,23 @@
 import time
 import requests
-from binance.client import Client
 from datetime import datetime
 
 # ── CONFIG ──────────────────────────────────────────────
-BOT_TOKEN = "8731021434:AAEpdZJ-BTiEeY2fdPFn3XshyX0bKi0SI-g"
-CHAT_ID   = "590265015"
+BOT_TOKEN = "8731021434:AAEpdZJ-BTiEeY2fdPFn3XshyX0bKi0SI-g"   # Replace this
+CHAT_ID   = "590265015"     # Replace this
 
 WATCH_LIST = [
     "MOVEUSDT",
     "HUSDT",
     "LAYERUSDT",
-    "ALLOTUSDT",
+    "ALLOUSDT",
 ]
 
-ALERT_THRESHOLD = 1.0   # Alert when price moves 1% or more in 1 minute
+ALERT_THRESHOLD = 1.0   # Alert at 1% move within 1 minute
 CHECK_INTERVAL  = 60    # Check every 60 seconds
-COOLDOWN        = 300   # Don't repeat alert for same token within 5 mins
+COOLDOWN        = 300   # 5 min cooldown per token to avoid spam
 # ────────────────────────────────────────────────────────
 
-client = Client()
 price_cache  = {}
 last_alerted = {}
 
@@ -32,17 +30,19 @@ def send_telegram(message):
         print(f"Telegram error: {e}")
 
 def get_futures_prices():
-    tickers = client.futures_mark_price()
-    return {t['symbol']: float(t['markPrice']) for t in tickers}
+    url = "https://fapi.binance.com/fapi/v1/premiumIndex"
+    response = requests.get(url, timeout=10)
+    data = response.json()
+    return {item['symbol']: float(item['markPrice']) for item in data}
 
 def check_movements():
     current_prices = get_futures_prices()
-    now_str  = datetime.now().strftime("%H:%M:%S")
-    now_ts   = time.time()
+    now_str = datetime.now().strftime("%H:%M:%S")
+    now_ts  = time.time()
 
     for symbol in WATCH_LIST:
         if symbol not in current_prices:
-            print(f"[WARNING] {symbol} not found on Binance Futures — check the ticker name!")
+            print(f"[WARNING] {symbol} not found on Binance Futures!")
             continue
 
         current = current_prices[symbol]
@@ -50,10 +50,7 @@ def check_movements():
         if symbol in price_cache:
             prev       = price_cache[symbol]
             change_pct = ((current - prev) / prev) * 100
-
-            # Check cooldown — avoid spamming same token
-            last_alert_time = last_alerted.get(symbol, 0)
-            cooldown_ok     = (now_ts - last_alert_time) > COOLDOWN
+            cooldown_ok = (now_ts - last_alerted.get(symbol, 0)) > COOLDOWN
 
             if abs(change_pct) >= ALERT_THRESHOLD and cooldown_ok:
                 direction = "🚀 PUMP" if change_pct > 0 else "🔴 DUMP"
@@ -73,15 +70,19 @@ def check_movements():
 
         price_cache[symbol] = current
 
-    print(f"[{now_str}] ✅ Checked {len(WATCH_LIST)} pairs. Next check in {CHECK_INTERVAL}s...")
+    print(f"[{now_str}] ✅ Checked {len(WATCH_LIST)} pairs. Next in {CHECK_INTERVAL}s...")
 
 # ── STARTUP ──────────────────────────────────────────────
 print("🤖 Kenny Price Alert Bot started!")
 send_telegram(
     "🤖 <b>Price Alert Bot LIVE!</b>\n\n"
     "📋 Watching:\n"
-    + "\n".join([f"• {s}" for s in WATCH_LIST])
-    + f"\n\n⚡ Alert threshold: {ALERT_THRESHOLD}%/min"
+    "• MOVE/USDT\n"
+    "• H/USDT\n"
+    "• LAYER/USDT\n"
+    "• ALLO/USDT\n\n"
+    f"⚡ Alert threshold: {ALERT_THRESHOLD}% per minute\n"
+    f"🔕 Cooldown: {COOLDOWN//60} min per token"
 )
 
 while True:
