@@ -35,6 +35,7 @@ def get_futures_prices():
         try:
             url = f"https://api.bybit.com/v5/market/tickers?category=linear&symbol={symbol}"
             response = requests.get(url, timeout=10)
+            print(f"[DEBUG] {symbol} raw response: {response.text[:200]}")
             data = response.json()
             if data['retCode'] == 0 and data['result']['list']:
                 price = float(data['result']['list'][0]['lastPrice'])
